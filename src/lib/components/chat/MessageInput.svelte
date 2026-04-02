@@ -71,7 +71,8 @@
 	import RichTextInput from '../common/RichTextInput.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import FileItem from '../common/FileItem.svelte';
-	import Image from '../common/Image.svelte';
+import Image from '../common/Image.svelte';
+import Video from '../common/Video.svelte';
 	import Spinner from '../common/Spinner.svelte';
 
 	import XMark from '../icons/XMark.svelte';
@@ -1236,74 +1237,135 @@
 									dir={$settings?.chatDirection ?? 'auto'}
 								>
 									{#each files as file, fileIdx}
-										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
-											{@const fileUrl =
-												file.url.startsWith('data') || file.url.startsWith('http')
-													? file.url
-													: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
-											<div class=" relative group">
-												<div class="relative flex items-center">
-													<Image
-														src={fileUrl}
-														alt=""
-														imageClassName=" size-10 rounded-xl object-cover"
-													/>
-													{#if atSelectedModel ? visionCapableModels.length === 0 : selectedModels.length !== visionCapableModels.length}
-														<Tooltip
-															className=" absolute top-1 left-1"
-															content={$i18n.t('{{ models }}', {
-																models: [...(atSelectedModel ? [atSelectedModel] : selectedModels)]
-																	.filter((id) => !visionCapableModels.includes(id))
-																	.join(', ')
-															})}
-														>
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																viewBox="0 0 24 24"
-																fill="currentColor"
-																aria-hidden="true"
-																class="size-4 fill-yellow-300"
-															>
-																<path
-																	fill-rule="evenodd"
-																	d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"
-																	clip-rule="evenodd"
-																/>
-															</svg>
-														</Tooltip>
-													{/if}
-												</div>
-												<div class=" absolute -top-1 -right-1">
-													<button
-														class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
-														false)
-															? ''
-															: 'outline-hidden focus:outline-hidden group-hover:visible invisible transition'}"
-														type="button"
-														aria-label={$i18n.t('Remove file')}
-														on:click={() => {
-															files.splice(fileIdx, 1);
-															files = files;
-														}}
-													>
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 20 20"
-															fill="currentColor"
-															aria-hidden="true"
-															class="size-4"
-														>
-															<path
-																d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-															/>
-														</svg>
-													</button>
-												</div>
-											</div>
-										{:else}
-											<FileItem
-												item={file}
-												name={file.name}
+                                {@const fileUrl =
+                                    file.url.startsWith('data') || file.url.startsWith('http')
+                                        ? file.url
+                                        : `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+                                {#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
+                                    <div class=" relative group">
+                                        <div class="relative flex items-center">
+                                            <Image
+                                                src={fileUrl}
+                                                alt=""
+                                                imageClassName=" size-10 rounded-xl object-cover"
+                                            />
+                                            {#if atSelectedModel ? visionCapableModels.length === 0 : selectedModels.length !== visionCapableModels.length}
+                                                <Tooltip
+                                                    className=" absolute top-1 left-1"
+                                                    content={$i18n.t('{{ models }}', {
+                                                        models: [...(atSelectedModel ? [atSelectedModel] : selectedModels)]
+                                                            .filter((id) => !visionCapableModels.includes(id))
+                                                            .join(', ')
+                                                    })}
+                                                >
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        viewBox="0 0 24 24"
+                                                        fill="currentColor"
+                                                        aria-hidden="true"
+                                                        class="size-4 fill-yellow-300"
+                                                    >
+                                                        <path
+                                                            fill-rule="evenodd"
+                                                            d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"
+                                                            clip-rule="evenodd"
+                                                        />
+                                                    </svg>
+                                                </Tooltip>
+                                            {/if}
+                                        </div>
+                                        <div class=" absolute -top-1 -right-1">
+                                            <button
+                                                class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
+                                                false)
+                                                    ? ''
+                                                    : 'outline-hidden focus:outline-hidden group-hover:visible invisible transition'}"
+                                                type="button"
+                                                aria-label={$i18n.t('Remove file')}
+                                                on:click={() => {
+                                                    files.splice(fileIdx, 1);
+                                                    files = files;
+                                                }}
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                    aria-hidden="true"
+                                                    class="size-4"
+                                                >
+                                                    <path
+                                                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+                                    <div class="relative group">
+                                        <div class="relative flex items-center">
+                                            <Video
+                                                src={fileUrl}
+                                                videoClassName="rounded-xl h-24 w-40 bg-black object-cover"
+                                                controls={true}
+                                                preload="metadata"
+                                            />
+                                            {#if atSelectedModel ? visionCapableModels.length === 0 : selectedModels.length !== visionCapableModels.length}
+                                                <Tooltip
+                                                    className=" absolute top-1 left-1"
+                                                    content={$i18n.t('{{ models }}', {
+                                                        models: [...(atSelectedModel ? [atSelectedModel] : selectedModels)]
+                                                            .filter((id) => !visionCapableModels.includes(id))
+                                                            .join(', ')
+                                                    })}
+                                                >
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        viewBox="0 0 24 24"
+                                                        fill="currentColor"
+                                                        aria-hidden="true"
+                                                        class="size-4 fill-yellow-300"
+                                                    >
+                                                        <path
+                                                            fill-rule="evenodd"
+                                                            d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"
+                                                            clip-rule="evenodd"
+                                                        />
+                                                    </svg>
+                                                </Tooltip>
+                                            {/if}
+                                        </div>
+                                        <div class=" absolute -top-1 -right-1">
+                                            <button
+                                                class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
+                                                false)
+                                                    ? ''
+                                                    : 'outline-hidden focus:outline-hidden group-hover:visible invisible transition'}"
+                                                type="button"
+                                                aria-label={$i18n.t('Remove file')}
+                                                on:click={() => {
+                                                    files.splice(fileIdx, 1);
+                                                    files = files;
+                                                }}
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                    aria-hidden="true"
+                                                    class="size-4"
+                                                >
+                                                    <path
+                                                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <FileItem
+                                        item={file}
+                                        name={file.name}
 												type={file.type}
 												size={file?.size}
 												loading={file.status === 'uploading'}

@@ -13,7 +13,8 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Markdown from './Markdown.svelte';
-	import Image from '$lib/components/common/Image.svelte';
+import Image from '$lib/components/common/Image.svelte';
+import Video from '$lib/components/common/Video.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -203,26 +204,34 @@
 						class="mb-1 w-full flex flex-col justify-end overflow-x-auto gap-1 flex-wrap"
 						dir={$settings?.chatDirection ?? 'auto'}
 					>
-						{#each message.files as file}
-							{@const fileUrl =
-								file.url?.startsWith('data') || file.url?.startsWith('http')
-									? file.url
-									: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
-							<div class={($settings?.chatBubble ?? true) ? 'self-end' : ''}>
-								{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
-									<Image src={fileUrl} imageClassName=" max-h-96 rounded-lg" />
-								{:else}
-									<FileItem
-										item={file}
-										url={file.url}
-										name={file.name}
-										type={file.type}
-										size={file?.size}
-										small={true}
-									/>
-								{/if}
-							</div>
-						{/each}
+                        {#each message.files as file}
+                            {@const fileUrl =
+                                file.url?.startsWith('data') || file.url?.startsWith('http')
+                                    ? file.url
+                                    : `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+                            <div class={($settings?.chatBubble ?? true) ? 'self-end' : ''}>
+                                {#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
+                                    <Image src={fileUrl} imageClassName=" max-h-96 rounded-lg" />
+                                {:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+                                    <Video
+                                        src={fileUrl}
+                                        className="w-full"
+                                        videoClassName="max-h-96 rounded-lg w-full"
+                                        controls={true}
+                                        preload="metadata"
+                                    />
+                                {:else}
+                                    <FileItem
+                                        item={file}
+                                        url={file.url}
+                                        name={file.name}
+                                        type={file.type}
+                                        size={file?.size}
+                                        small={true}
+                                    />
+                                {/if}
+                            </div>
+                        {/each}
 					</div>
 				{/if}
 			{/if}
@@ -230,67 +239,104 @@
 			{#if edit === true}
 				<div class=" w-full bg-gray-50 dark:bg-gray-800 rounded-3xl px-5 py-3 mb-2">
 					{#if (editedFiles ?? []).length > 0}
-						<div class="flex items-center flex-wrap gap-2 -mx-2 mb-1">
-							{#each editedFiles as file, fileIdx}
-								{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
-									{@const fileUrl =
-										file.url?.startsWith('data') || file.url?.startsWith('http')
-											? file.url
-											: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
-									<div class=" relative group">
-										<div class="relative flex items-center">
-											<Image
-												src={fileUrl}
-												alt="input"
-												imageClassName=" size-14 rounded-xl object-cover"
-											/>
-										</div>
-										<div class=" absolute -top-1 -right-1">
-											<button
-												class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
-												false)
-													? ''
-													: 'group-hover:visible invisible transition'}"
-												type="button"
-												on:click={() => {
-													editedFiles.splice(fileIdx, 1);
+                        <div class="flex items-center flex-wrap gap-2 -mx-2 mb-1">
+                            {#each editedFiles as file, fileIdx}
+                                {@const fileUrl =
+                                    file.url?.startsWith('data') || file.url?.startsWith('http')
+                                        ? file.url
+                                        : `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+                                {#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
+                                    <div class=" relative group">
+                                        <div class="relative flex items-center">
+                                            <Image
+                                                src={fileUrl}
+                                                alt="input"
+                                                imageClassName=" size-14 rounded-xl object-cover"
+                                            />
+                                        </div>
+                                        <div class=" absolute -top-1 -right-1">
+                                            <button
+                                                class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
+                                                false)
+                                                    ? ''
+                                                    : 'group-hover:visible invisible transition'}"
+                                                type="button"
+                                                on:click={() => {
+                                                    editedFiles.splice(fileIdx, 1);
 
-													editedFiles = editedFiles;
-												}}
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 20 20"
-													fill="currentColor"
-													class="size-4"
-												>
-													<path
-														d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-													/>
-												</svg>
-											</button>
-										</div>
-									</div>
-								{:else}
-									<FileItem
-										item={file}
-										name={file.name}
-										type={file.type}
-										size={file?.size}
-										loading={file.status === 'uploading'}
-										dismissible={true}
-										edit={true}
-										on:dismiss={async () => {
-											editedFiles.splice(fileIdx, 1);
+                                                    editedFiles = editedFiles;
+                                                }}
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                    class="size-4"
+                                                >
+                                                    <path
+                                                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+                                    <div class="relative group">
+                                        <div class="relative flex items-center">
+                                            <Video
+                                                src={fileUrl}
+                                                className="w-full"
+                                                videoClassName="rounded-xl h-20 w-32 bg-black"
+                                                controls={true}
+                                                preload="metadata"
+                                            />
+                                        </div>
+                                        <div class=" absolute -top-1 -right-1">
+                                            <button
+                                                class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
+                                                false)
+                                                    ? ''
+                                                    : 'group-hover:visible invisible transition'}"
+                                                type="button"
+                                                on:click={() => {
+                                                    editedFiles.splice(fileIdx, 1);
 
-											editedFiles = editedFiles;
-										}}
-										on:click={() => {
-											console.log(file);
-										}}
-									/>
-								{/if}
-							{/each}
+                                                    editedFiles = editedFiles;
+                                                }}
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                    class="size-4"
+                                                >
+                                                    <path
+                                                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <FileItem
+                                        item={file}
+                                        name={file.name}
+                                        type={file.type}
+                                        size={file?.size}
+                                        loading={file.status === 'uploading'}
+                                        dismissible={true}
+                                        edit={true}
+                                        on:dismiss={async () => {
+                                            editedFiles.splice(fileIdx, 1);
+
+                                            editedFiles = editedFiles;
+                                        }}
+                                        on:click={() => {
+                                            console.log(file);
+                                        }}
+                                    />
+                                {/if}
+                            {/each}
 						</div>
 					{/if}
 

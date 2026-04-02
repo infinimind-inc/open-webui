@@ -10,8 +10,9 @@
 	import { getKnowledgeById } from '$lib/apis/knowledge';
 	import { getFileById, getFileContentById } from '$lib/apis/files';
 
-	import CodeBlock from '$lib/components/chat/Messages/CodeBlock.svelte';
-	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
+import CodeBlock from '$lib/components/chat/Messages/CodeBlock.svelte';
+import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
+import Video from '$lib/components/common/Video.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -37,8 +38,9 @@
 	let loading = false;
 
 	let isPDF = false;
-	let isAudio = false;
-	let isImage = false;
+    let isAudio = false;
+    let isVideo = false;
+    let isImage = false;
 	let isExcel = false;
 	let isDocx = false;
 	let isPptx = false;
@@ -108,13 +110,22 @@
 			item.name.toLowerCase().endsWith('.php') ||
 			item.name.toLowerCase().endsWith('.rb'));
 
-	$: isAudio =
-		(item?.meta?.content_type ?? '').startsWith('audio/') ||
-		(item?.name && item?.name.toLowerCase().endsWith('.mp3')) ||
-		(item?.name && item?.name.toLowerCase().endsWith('.wav')) ||
-		(item?.name && item?.name.toLowerCase().endsWith('.ogg')) ||
-		(item?.name && item?.name.toLowerCase().endsWith('.m4a')) ||
-		(item?.name && item?.name.toLowerCase().endsWith('.webm'));
+    $: isAudio =
+        (item?.meta?.content_type ?? '').startsWith('audio/') ||
+        (item?.name && item?.name.toLowerCase().endsWith('.mp3')) ||
+        (item?.name && item?.name.toLowerCase().endsWith('.wav')) ||
+        (item?.name && item?.name.toLowerCase().endsWith('.ogg')) ||
+        (item?.name && item?.name.toLowerCase().endsWith('.m4a')) ||
+        (item?.name && item?.name.toLowerCase().endsWith('.webm'));
+
+    $: isVideo =
+        (item?.meta?.content_type ?? '').startsWith('video/') ||
+        (item?.name &&
+            (item.name.toLowerCase().endsWith('.mp4') ||
+                item.name.toLowerCase().endsWith('.mov') ||
+                item.name.toLowerCase().endsWith('.webm') ||
+                item.name.toLowerCase().endsWith('.mkv') ||
+                item.name.toLowerCase().endsWith('.avi')));
 
 	$: isImage =
 		(item?.meta?.content_type ?? '').startsWith('image/') ||
@@ -433,10 +444,10 @@
 					</div>
 				{/if}
 
-				{#if isImage}
-					<div class="relative w-full max-h-[70vh] overflow-hidden">
-						<div class="absolute top-2 right-2 z-10">
-							<Tooltip content={$i18n.t('Reset view')}>
+                {#if isImage}
+                    <div class="relative w-full max-h-[70vh] overflow-hidden">
+                        <div class="absolute top-2 right-2 z-10">
+                            <Tooltip content={$i18n.t('Reset view')}>
 								<button
 									class="p-1.5 rounded-lg bg-white/80 dark:bg-gray-850/80 backdrop-blur-sm shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
 									on:click={resetImageView}
@@ -452,11 +463,19 @@
 								class="w-full object-contain rounded-lg"
 								loading="lazy"
 								draggable="false"
-							/>
-						</div>
-					</div>
-				{:else if selectedTab === ''}
-					{#if item?.file?.data}
+                            />
+                        </div>
+                    </div>
+                {:else if isVideo}
+                    <Video
+                        src={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
+                        className="w-full"
+                        videoClassName="w-full max-h-[70vh] rounded-lg bg-black"
+                        controls={true}
+                        preload="metadata"
+                    />
+                {:else if selectedTab === ''}
+                    {#if item?.file?.data}
 						{@const rawContent = (item?.file?.data?.content ?? '').trim() || 'No content'}
 						{@const isTruncated =
 							($settings?.renderMarkdownInPreviews ?? true) &&

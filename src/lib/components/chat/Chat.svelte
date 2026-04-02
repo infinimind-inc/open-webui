@@ -2039,13 +2039,13 @@
 		});
 
 		let files = structuredClone(chatFiles);
-		files.push(
-			...(userMessage?.files ?? []).filter(
-				(item) =>
-					['doc', 'text', 'note', 'chat', 'collection'].includes(item.type) ||
-					(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
-			)
-		);
+        files.push(
+            ...(userMessage?.files ?? []).filter(
+                (item) =>
+                    ['doc', 'text', 'note', 'chat', 'collection', 'video'].includes(item.type) ||
+                    (item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
+            )
+        );
 		// Remove duplicates
 		files = files.filter(
 			(item, index, array) =>
@@ -2091,35 +2091,59 @@
 			}))
 		].filter((message) => message);
 
-		messages = messages
-			.map((message, idx, arr) => {
-				const imageFiles = (message?.files ?? []).filter(
-					(file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
-				);
+        messages = messages
+            .map((message, idx, arr) => {
+                const imageFiles = (message?.files ?? []).filter(
+                    (file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
+                );
+                const videoFiles = (message?.files ?? []).filter(
+                    (file) => file.type === 'video' || (file?.content_type ?? '').startsWith('video/')
+                );
 
-				return {
-					role: message.role,
-					...(message.role === 'user' && imageFiles.length > 0
-						? {
-								content: [
-									{
-										type: 'text',
-										text: message?.merged?.content ?? message.content
-									},
-									...imageFiles.map((file) => ({
-										type: 'image_url',
-										image_url: {
-											url: file.url
-										}
-									}))
-								]
-							}
-						: {
-								content: message?.merged?.content ?? message.content
-							})
-				};
-			})
-			.filter((message) => message?.role === 'user' || message?.content?.trim());
+                const hasMedia = imageFiles.length > 0 || videoFiles.length > 0;
+                const baseContent = message?.merged?.content ?? message.content;
+
+                if (message.role !== 'user' || !hasMedia) {
+                    return {
+                        role: message.role,
+                        content: baseContent
+                    };
+                }
+
+                const mediaContent = [];
+
+                if (Array.isArray(baseContent)) {
+                    mediaContent.push(...baseContent);
+                } else if (typeof baseContent === 'string') {
+                    mediaContent.push({
+                        type: 'text',
+                        text: baseContent
+                    });
+                } else if (baseContent) {
+                    mediaContent.push(baseContent);
+                }
+
+                mediaContent.push(
+                    ...imageFiles.map((file) => ({
+                        type: 'image_url',
+                        image_url: {
+                            url: file.url
+                        }
+                    })),
+                    ...videoFiles.map((file) => ({
+                        type: 'video_url',
+                        video_url: {
+                            url: file.url
+                        }
+                    }))
+                );
+
+                return {
+                    role: message.role,
+                    content: mediaContent
+                };
+            })
+            .filter((message) => message?.role === 'user' || message?.content?.trim());
 
 		const toolIds = [];
 		const toolServerIds = [];
