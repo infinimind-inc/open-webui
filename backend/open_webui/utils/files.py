@@ -27,41 +27,48 @@ import re
 
 import requests
 
+
+def get_file_base64_from_url(url: str) -> Optional[str]:
+    try:
+        if url.startswith('http'):
+            # Validate URL to prevent SSRF attacks against local/private networks
+            validate_url(url)
+            response = requests.get(url)
+            response.raise_for_status()
+            file_data = response.content
+            encoded_string = base64.b64encode(file_data).decode('utf-8')
+            content_type = response.headers.get('Content-Type') or 'application/octet-stream'
+            return f'data:{content_type};base64,{encoded_string}'
+
+        file = Files.get_file_by_id(url)
+
+        if not file:
+            return None
+
+        file_path = Storage.get_file(file.path)
+        file_path = Path(file_path)
+
+        if file_path.is_file():
+            with open(file_path, 'rb') as file_handle:
+                encoded_string = base64.b64encode(file_handle.read()).decode('utf-8')
+                content_type = file.meta.get('content_type') or mimetypes.guess_type(file_path.name)[0]
+                content_type = content_type or 'application/octet-stream'
+                return f'data:{content_type};base64,{encoded_string}'
+
+        return None
+    except Exception:
+        return None
+
+
 BASE64_IMAGE_URL_PREFIX = re.compile(r'data:image/\w+;base64,', re.IGNORECASE)
 MARKDOWN_IMAGE_URL_PATTERN = re.compile(r'!\[(.*?)\]\((.+?)\)', re.IGNORECASE)
 
 
 def get_image_base64_from_url(url: str) -> Optional[str]:
-    try:
-        if url.startswith('http'):
-            # Validate URL to prevent SSRF attacks against local/private networks
-            validate_url(url)
-            # Download the image from the URL
-            response = requests.get(url)
-            response.raise_for_status()
-            image_data = response.content
-            encoded_string = base64.b64encode(image_data).decode('utf-8')
-            content_type = response.headers.get('Content-Type', 'image/png')
-            return f'data:{content_type};base64,{encoded_string}'
-        else:
-            file = Files.get_file_by_id(url)
-
-            if not file:
-                return None
-
-            file_path = Storage.get_file(file.path)
-            file_path = Path(file_path)
-
-            if file_path.is_file():
-                with open(file_path, 'rb') as image_file:
-                    encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                    content_type, _ = mimetypes.guess_type(file_path.name)
-                    return f'data:{content_type};base64,{encoded_string}'
-            else:
-                return None
-
-    except Exception as e:
-        return None
+    encoded_file = get_file_base64_from_url(url)
+    if encoded_file and encoded_file.startswith('data:image/'):
+        return encoded_file
+    return None
 
 
 def get_image_url_from_base64(request, base64_image_string, metadata, user):
