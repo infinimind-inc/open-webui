@@ -113,6 +113,7 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
+from open_webui.utils.video_params import filter_video_params
 
 
 from open_webui.config import (
@@ -305,7 +306,10 @@ def get_citation_source_from_tool_result(
 
             return [
                 {
-                    "source": {"name": url or "fetch_url", "id": url or "fetch_url"},
+                    "source": {
+                        "name": url or "fetch_url",
+                        "id": url or "fetch_url",
+                    },
                     "document": [snippet],
                     "metadata": [
                         {
@@ -657,7 +661,10 @@ def handle_responses_streaming_event(
                         # "reasoning_text" -> Skipped (should use reasoning item)
                         if delta_type in ["text", "output_text"]:
                             key = "text"
-                        elif delta_type in ["reasoning_text", "reasoning_summary_text"]:
+                        elif delta_type in [
+                            "reasoning_text",
+                            "reasoning_summary_text",
+                        ]:
                             # Skip reasoning updates for message items
                             return new_output, None
                         else:
@@ -1167,7 +1174,12 @@ async def terminal_event_handler(
 
 
 async def chat_completion_tools_handler(
-    request: Request, body: dict, extra_params: dict, user: UserModel, models, tools
+    request: Request,
+    body: dict,
+    extra_params: dict,
+    user: UserModel,
+    models,
+    tools,
 ) -> tuple[dict, dict]:
     async def get_content_from_response(response) -> Optional[str]:
         content = None
@@ -2012,6 +2024,8 @@ def apply_params_to_form_data(form_data, model):
     params = form_data.pop("params", {})
     custom_params = params.pop("custom_params", {})
 
+    params = filter_video_params(model.get("id", ""), params)
+
     open_webui_params = {
         "stream_response": bool,
         "stream_delta_chunk_size": int,
@@ -2100,12 +2114,11 @@ async def convert_url_media_to_base64(form_data):
                 if not base64_data:
                     new_content.append(item)
                     continue
-                new_content.append(
-                    {
-                        "type": item_type,
-                        url_key: {"url": base64_data},
-                    }
-                )
+
+                updated_item = {**item}
+                updated_item[url_key] = {**(item.get(url_key, {}) or {}), "url": base64_data}
+
+                new_content.append(updated_item)
             except Exception as e:
                 log.debug(f"Error converting media URL to base64: {e}")
                 new_content.append(item)
@@ -2225,7 +2238,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if system_message:  # Chat Controls/User Settings
         try:
             form_data = apply_system_prompt_to_body(
-                system_message.get("content"), form_data, metadata, user, replace=True
+                system_message.get("content"),
+                form_data,
+                metadata,
+                user,
+                replace=True,
             )  # Required to handle system prompt variables
         except:
             pass
@@ -2756,7 +2773,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 # If the function calling is not native, then call the tools function calling handler
                 try:
                     form_data, flags = await chat_completion_tools_handler(
-                        request, form_data, extra_params, user, models, tools_dict
+                        request,
+                        form_data,
+                        extra_params,
+                        user,
+                        models,
+                        tools_dict,
                     )
                     sources.extend(flags.get("sources", []))
                 except Exception as e:
@@ -3438,7 +3460,10 @@ async def streaming_chat_response_handler(response, ctx):
                                 # Set the after_tag content on the new item
                                 if output_item_type == "reasoning":
                                     output[-1]["content"] = [
-                                        {"type": "output_text", "text": after_tag}
+                                        {
+                                            "type": "output_text",
+                                            "text": after_tag,
+                                        }
                                     ]
                                 elif output_item_type == "open_webui:code_interpreter":
                                     output[-1]["code"] = after_tag
@@ -3508,7 +3533,10 @@ async def streaming_chat_response_handler(response, ctx):
                             # Update the item with final content
                             if last_type == "reasoning":
                                 item["content"] = [
-                                    {"type": "output_text", "text": block_content}
+                                    {
+                                        "type": "output_text",
+                                        "text": block_content,
+                                    }
                                 ]
                                 item["ended_at"] = time.time()
                                 item["duration"] = int(
@@ -3696,7 +3724,10 @@ async def streaming_chat_response_handler(response, ctx):
                                 filter_functions=filter_functions,
                                 filter_type="stream",
                                 form_data=data,
-                                extra_params={"__body__": form_data, **extra_params},
+                                extra_params={
+                                    "__body__": form_data,
+                                    **extra_params,
+                                },
                             )
 
                             if data:
@@ -3908,7 +3939,10 @@ async def streaming_chat_response_handler(response, ctx):
                                             )
 
                                     image_urls = get_image_urls(
-                                        delta.get("images", []), request, metadata, user
+                                        delta.get("images", []),
+                                        request,
+                                        metadata,
+                                        user,
                                     )
                                     if image_urls:
                                         image_file_list = [
@@ -4210,7 +4244,10 @@ async def streaming_chat_response_handler(response, ctx):
                                                 "status": "in_progress",
                                                 "role": "assistant",
                                                 "content": [
-                                                    {"type": "output_text", "text": ""}
+                                                    {
+                                                        "type": "output_text",
+                                                        "text": "",
+                                                    }
                                                 ],
                                             }
                                         )
@@ -4425,7 +4462,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     tool_name=tool_function_name,
                                     tool_params=tool_function_params,
                                     tool_result=tool_result,
-                                    tool_id=tool.get("tool_id", "") if tool else "",
+                                    tool_id=(tool.get("tool_id", "") if tool else ""),
                                 )
                                 tool_call_sources.extend(citation_sources)
                             except Exception as e:
@@ -4434,7 +4471,7 @@ async def streaming_chat_response_handler(response, ctx):
                         results.append(
                             {
                                 "tool_call_id": tool_call_id,
-                                "content": str(tool_result) if tool_result else "",
+                                "content": (str(tool_result) if tool_result else ""),
                                 **(
                                     {"files": tool_result_files}
                                     if tool_result_files
@@ -4626,7 +4663,8 @@ async def streaming_chat_response_handler(response, ctx):
                                 code = sanitize_code(code)
 
                                 if CODE_INTERPRETER_BLOCKED_MODULES:
-                                    blocking_code = textwrap.dedent(f"""
+                                    blocking_code = textwrap.dedent(
+                                        f"""
                                         import builtins
     
                                         BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
@@ -4642,7 +4680,8 @@ async def streaming_chat_response_handler(response, ctx):
                                             return _real_import(name, globals, locals, fromlist, level)
     
                                         builtins.__import__ = restricted_import
-                                    """)
+                                    """
+                                    )
                                     code = blocking_code + "\n" + code
 
                                 if (
