@@ -12,6 +12,8 @@ from fastapi import (
 )
 from typing import Optional
 from pathlib import Path
+from urllib.parse import urlparse, unquote
+import os
 
 from open_webui.storage.provider import Storage
 
@@ -26,42 +28,150 @@ import io
 import re
 
 import requests
+import boto3
+from botocore.config import Config
+
+from open_webui.config import (
+    S3_ACCESS_KEY_ID,
+    S3_SECRET_ACCESS_KEY,
+    S3_REGION_NAME,
+    S3_ENDPOINT_URL,
+    S3_USE_ACCELERATE_ENDPOINT,
+    S3_ADDRESSING_STYLE,
+)
 
 BASE64_IMAGE_URL_PREFIX = re.compile(r"data:image/\w+;base64,", re.IGNORECASE)
 MARKDOWN_IMAGE_URL_PATTERN = re.compile(r"!\[(.*?)\]\((.+?)\)", re.IGNORECASE)
+S3_URL_PATTERN = re.compile(r"^s3://([^/]+)/(.+)$", re.IGNORECASE)
+
+
+def _get_s3_client():
+    config = Config(
+        s3={
+            "use_accelerate_endpoint": S3_USE_ACCELERATE_ENDPOINT,
+            "addressing_style": S3_ADDRESSING_STYLE,
+        }
+    )
+    if S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY:
+        return boto3.client(
+            "s3",
+            region_name=S3_REGION_NAME,
+            endpoint_url=S3_ENDPOINT_URL,
+            aws_access_key_id=S3_ACCESS_KEY_ID,
+            aws_secret_access_key=S3_SECRET_ACCESS_KEY,
+            config=config,
+        )
+    return boto3.client(
+        "s3",
+        region_name=S3_REGION_NAME,
+        endpoint_url=S3_ENDPOINT_URL,
+        config=config,
+    )
+
+
+def _is_path_allowed(path: str, allowed_paths: list[str]) -> bool:
+    if not allowed_paths:
+        return True
+    real_path = os.path.realpath(path)
+    for base in allowed_paths:
+        base_real = os.path.realpath(base)
+        if real_path == base_real or real_path.startswith(base_real + os.sep):
+            return True
+    return False
+
+
+def _build_data_uri(content: bytes, content_type: Optional[str]) -> Optional[str]:
+    if not content:
+        return None
+    encoded = base64.b64encode(content).decode("utf-8")
+    fallback_type = content_type or "application/octet-stream"
+    return f"data:{fallback_type};base64,{encoded}"
+
+
+def get_media_base64_from_url(
+    url: str,
+    max_size_mb: Optional[int] = None,
+    allowed_paths: Optional[list[str]] = None,
+) -> Optional[str]:
+    try:
+        if not url:
+            return None
+
+        if url.startswith("http"):
+            validate_url(url)
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            content_length = response.headers.get("Content-Length")
+            if content_length and max_size_mb:
+                if int(content_length) > max_size_mb * 1024 * 1024:
+                    return None
+            content = response.content
+            if max_size_mb and len(content) > max_size_mb * 1024 * 1024:
+                return None
+            content_type = response.headers.get("Content-Type")
+            return _build_data_uri(content, content_type)
+
+        if url.startswith("s3://"):
+            match = S3_URL_PATTERN.match(url)
+            if not match:
+                return None
+            bucket_name, key = match.groups()
+            client = _get_s3_client()
+            head = client.head_object(Bucket=bucket_name, Key=key)
+            content_length = head.get("ContentLength")
+            if content_length and max_size_mb:
+                if int(content_length) > max_size_mb * 1024 * 1024:
+                    return None
+            obj = client.get_object(Bucket=bucket_name, Key=key)
+            content = obj["Body"].read()
+            if max_size_mb and len(content) > max_size_mb * 1024 * 1024:
+                return None
+            content_type = obj.get("ContentType") or mimetypes.guess_type(key)[0]
+            return _build_data_uri(content, content_type)
+
+        parsed = urlparse(url)
+        if parsed.scheme == "file" or os.path.isabs(url):
+            # Local filesystem reads are opt-in. Require a non-empty allowlist.
+            if not allowed_paths:
+                return None
+
+            path = unquote(parsed.path) if parsed.scheme == "file" else url
+            if not _is_path_allowed(path, allowed_paths):
+                return None
+            if not os.path.isfile(path):
+                return None
+            if max_size_mb and os.path.getsize(path) > max_size_mb * 1024 * 1024:
+                return None
+            with open(path, "rb") as media_file:
+                content = media_file.read()
+            content_type, _ = mimetypes.guess_type(path)
+            return _build_data_uri(content, content_type)
+
+        file = Files.get_file_by_id(url)
+        if not file:
+            return None
+
+        if not file.path:
+            return None
+
+        file_path = Storage.get_file(file.path)
+        file_path = Path(file_path)
+        if not file_path.is_file():
+            return None
+
+        with open(file_path, "rb") as media_file:
+            content = media_file.read()
+        if max_size_mb and len(content) > max_size_mb * 1024 * 1024:
+            return None
+        content_type, _ = mimetypes.guess_type(file_path.name)
+        return _build_data_uri(content, content_type)
+
+    except Exception:
+        return None
 
 
 def get_image_base64_from_url(url: str) -> Optional[str]:
-    try:
-        if url.startswith("http"):
-            # Validate URL to prevent SSRF attacks against local/private networks
-            validate_url(url)
-            # Download the image from the URL
-            response = requests.get(url)
-            response.raise_for_status()
-            image_data = response.content
-            encoded_string = base64.b64encode(image_data).decode("utf-8")
-            content_type = response.headers.get("Content-Type", "image/png")
-            return f"data:{content_type};base64,{encoded_string}"
-        else:
-            file = Files.get_file_by_id(url)
-
-            if not file:
-                return None
-
-            file_path = Storage.get_file(file.path)
-            file_path = Path(file_path)
-
-            if file_path.is_file():
-                with open(file_path, "rb") as image_file:
-                    encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-                    content_type, _ = mimetypes.guess_type(file_path.name)
-                    return f"data:{content_type};base64,{encoded_string}"
-            else:
-                return None
-
-    except Exception as e:
-        return None
+    return get_media_base64_from_url(url)
 
 
 def get_image_url_from_base64(request, base64_image_string, metadata, user):
@@ -160,6 +270,9 @@ def get_file_url_from_base64(request, base64_file_string, metadata, user):
 def get_image_base64_from_file_id(id: str) -> Optional[str]:
     file = Files.get_file_by_id(id)
     if not file:
+        return None
+
+    if not file.path:
         return None
 
     try:

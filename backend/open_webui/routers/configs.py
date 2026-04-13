@@ -507,6 +507,33 @@ async def set_code_execution_config(
 
 
 ############################
+# VideoPointerConfig
+############################
+class VideoPointerConfigForm(BaseModel):
+    VIDEO_POINTER_ALLOWED_PATHS: list[str]
+
+
+@router.get("/video_pointer", response_model=VideoPointerConfigForm)
+async def get_video_pointer_config(request: Request, user=Depends(get_admin_user)):
+    return {
+        "VIDEO_POINTER_ALLOWED_PATHS": request.app.state.config.VIDEO_POINTER_ALLOWED_PATHS,
+    }
+
+
+@router.post("/video_pointer", response_model=VideoPointerConfigForm)
+async def set_video_pointer_config(
+    request: Request, form_data: VideoPointerConfigForm, user=Depends(get_admin_user)
+):
+    request.app.state.config.VIDEO_POINTER_ALLOWED_PATHS = (
+        form_data.VIDEO_POINTER_ALLOWED_PATHS
+    )
+
+    return {
+        "VIDEO_POINTER_ALLOWED_PATHS": request.app.state.config.VIDEO_POINTER_ALLOWED_PATHS,
+    }
+
+
+############################
 # SetDefaultModels
 ############################
 class ModelsConfigForm(BaseModel):

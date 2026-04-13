@@ -16,6 +16,7 @@ services:
     container_name: open-webui
     volumes:
       - open-webui:/app/backend/data
+      - /home/edison/Documents:/home/edison/Documents:ro
     depends_on:
       - ollama
     ports:
@@ -23,6 +24,7 @@ services:
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
       - 'WEBUI_SECRET_KEY='
+      - 'VIDEO_POINTER_ALLOWED_PATHS=/'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped

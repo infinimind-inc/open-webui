@@ -3021,6 +3021,55 @@ FILE_IMAGE_COMPRESSION_HEIGHT = PersistentConfig(
 )
 
 
+def _split_env_list(value: str, default: str) -> list[str]:
+    raw = value if value is not None else default
+    return [item.strip().lower() for item in raw.split(",") if item.strip()]
+
+
+VIDEO_POINTER_ALLOWED_SCHEMES = PersistentConfig(
+    "VIDEO_POINTER_ALLOWED_SCHEMES",
+    "video.pointer.allowed_schemes",
+    _split_env_list(
+        os.environ.get("VIDEO_POINTER_ALLOWED_SCHEMES"),
+        "http,https,s3,file,youtube",
+    ),
+)
+
+VIDEO_POINTER_ALLOWED_PATHS = PersistentConfig(
+    "VIDEO_POINTER_ALLOWED_PATHS",
+    "video.pointer.allowed_paths",
+    [
+        path.strip()
+        for path in (os.environ.get("VIDEO_POINTER_ALLOWED_PATHS") or "").split(",")
+        if path.strip()
+    ],
+)
+
+VIDEO_POINTER_MAX_FILE_SIZE_MB = PersistentConfig(
+    "VIDEO_POINTER_MAX_FILE_SIZE_MB",
+    "video.pointer.max_file_size_mb",
+    int(os.environ.get("VIDEO_POINTER_MAX_FILE_SIZE_MB", "200")),
+)
+
+ENABLE_YOUTUBE_POINTERS = PersistentConfig(
+    "ENABLE_YOUTUBE_POINTERS",
+    "video.pointer.enable_youtube",
+    os.environ.get("ENABLE_YOUTUBE_POINTERS", "True").lower() == "true",
+)
+
+YTDLP_PATH = PersistentConfig(
+    "YTDLP_PATH",
+    "video.pointer.ytdlp_path",
+    os.environ.get("YTDLP_PATH", "yt-dlp"),
+)
+
+YOUTUBE_MAX_DURATION_SECONDS = PersistentConfig(
+    "YOUTUBE_MAX_DURATION_SECONDS",
+    "video.pointer.youtube_max_duration_seconds",
+    int(os.environ.get("YOUTUBE_MAX_DURATION_SECONDS", "600")),
+)
+
+
 RAG_ALLOWED_FILE_EXTENSIONS = PersistentConfig(
     "RAG_ALLOWED_FILE_EXTENSIONS",
     "rag.file.allowed_extensions",

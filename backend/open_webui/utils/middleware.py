@@ -64,7 +64,9 @@ from open_webui.utils.files import (
     get_file_url_from_base64,
     get_image_base64_from_url,
     get_image_url_from_base64,
+    get_media_base64_from_url,
 )
+from open_webui.config import VIDEO_POINTER_ALLOWED_PATHS, VIDEO_POINTER_MAX_FILE_SIZE_MB
 
 
 from open_webui.models.users import UserModel
@@ -2107,9 +2109,20 @@ async def convert_url_media_to_base64(form_data):
                 new_content.append(item)
                 continue
 
+            # Pass file:// URLs through directly — the model server
+            # can read local files if it has filesystem access.
+            if media_url.startswith("file://"):
+                new_content.append(item)
+                continue
+
             try:
+                max_size_mb = VIDEO_POINTER_MAX_FILE_SIZE_MB.value
+                allowed_paths = VIDEO_POINTER_ALLOWED_PATHS.value
                 base64_data = await asyncio.to_thread(
-                    get_image_base64_from_url, media_url
+                    get_media_base64_from_url,
+                    media_url,
+                    max_size_mb,
+                    allowed_paths,
                 )
                 if not base64_data:
                     new_content.append(item)

@@ -156,7 +156,10 @@
 				'ocr',
 				'tika',
 				'docling',
-				'unstructured'
+				'unstructured',
+				'video',
+				'pointer',
+				'allowed paths'
 			]
 		},
 		{

@@ -17,6 +17,11 @@
 		updateRAGConfig
 	} from '$lib/apis/retrieval';
 
+	import {
+		getVideoPointerConfig,
+		updateVideoPointerConfig
+	} from '$lib/apis/configs';
+
 	import { reindexKnowledgeFiles } from '$lib/apis/knowledge';
 	import { deleteAllFiles } from '$lib/apis/files';
 
@@ -65,6 +70,8 @@
 	};
 
 	let RAGConfig = null;
+
+	let videoPointerAllowedPaths = '';
 
 	const embeddingModelUpdateHandler = async () => {
 		if (RAG_EMBEDDING_ENGINE === '' && RAG_EMBEDDING_MODEL.split('/').length - 1 > 1) {
@@ -240,6 +247,14 @@
 					: {}
 		});
 		dispatch('save');
+
+		// Save video pointer config separately
+		await updateVideoPointerConfig(localStorage.token, {
+			VIDEO_POINTER_ALLOWED_PATHS: videoPointerAllowedPaths
+				.split(',')
+				.map((p) => p.trim())
+				.filter((p) => p !== '')
+		});
 	};
 
 	const setEmbeddingConfig = async () => {
@@ -280,6 +295,12 @@
 				: config.MINERU_PARAMS;
 
 		RAGConfig = config;
+
+		// Load video pointer config
+		const vpConfig = await getVideoPointerConfig(localStorage.token).catch(() => null);
+		if (vpConfig) {
+			videoPointerAllowedPaths = (vpConfig.VIDEO_POINTER_ALLOWED_PATHS ?? []).join(', ');
+		}
 	});
 </script>
 
@@ -1464,6 +1485,32 @@
 						<div class=" self-center text-xs font-medium">{$i18n.t('OneDrive')}</div>
 						<div class="flex items-center relative">
 							<Switch bind:state={RAGConfig.ENABLE_ONEDRIVE_INTEGRATION} />
+						</div>
+					</div>
+				</div>
+
+				<div class="mb-3">
+					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('Video Pointers')}</div>
+
+					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
+
+					<div class="  mb-2.5 flex w-full justify-between">
+						<div class=" self-center text-xs font-medium">{$i18n.t('Allowed Paths')}</div>
+						<div class="flex items-center relative">
+							<Tooltip
+								content={$i18n.t(
+									'Comma-separated list of local filesystem paths that are allowed for file:// video pointers. Leave empty to restrict access to admins only.'
+								)}
+								placement="top-start"
+							>
+								<input
+									class="flex-1 w-full text-sm bg-transparent outline-hidden"
+									type="text"
+									placeholder={$i18n.t('e.g. /ephemeral, /mnt/shared/videos')}
+									bind:value={videoPointerAllowedPaths}
+									autocomplete="off"
+								/>
+							</Tooltip>
 						</div>
 					</div>
 				</div>

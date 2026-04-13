@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-13
+
+Local changes since `d562e9d20e49d1e3522e6bf0d555380550e1f349` (includes uncommitted working tree changes).
+
+Included commits:
+
+- `cc8ebab18` (2026-04-02) Add initial working implementation of video upload.
+- `d9e4f777c` (2026-04-08) Add video-related param support (mm params + fps), UI fixes, and request-payload debugging.
+
+### Added
+
+- **Video uploads in chat.** `video/*` files are accepted for multimodal requests without forcing retrieval/text extraction. Video rendering components and message/file UI updates treat videos as first-class attachments.
+- **Multimodal video request building.** Video attachments are sent as `video_url` content parts, with optional per-request `fps` support.
+- **Chat Controls: Video parameters.** Model-aware Video controls UI (slider/number inputs) backed by `src/lib/constants/video-params.ts`. Backend allowlist forwards video-related params (e.g. `mm_processor_kwargs`) only for supported model IDs (Qwen 3.5, Gemma 4, DeepFrame).
+- **Video pointer endpoint (`POST /api/v1/files/pointer`).** Attach videos by reference via HTTP(S) URLs, `s3://` URIs, local filesystem paths (`file://`), or YouTube URLs. The backend resolves the pointer, validates it against configurable security limits, and returns the video data (or base64-encoded content for YouTube).
+- **Video pointer security configuration.** New environment variables and admin UI settings to control allowed URL schemes (`VIDEO_POINTER_ALLOWED_SCHEMES`), allowed local base paths (`VIDEO_POINTER_ALLOWED_PATHS`), maximum file size (`VIDEO_POINTER_MAX_FILE_SIZE_MB`), YouTube support toggle (`ENABLE_YOUTUBE_POINTERS`), yt-dlp binary path (`YTDLP_PATH`), and YouTube max duration (`YOUTUBE_MAX_DURATION_SECONDS`). Admin Settings > Documents page includes a "Video Pointers" section for configuring allowed paths.
+- **YouTube video download via yt-dlp.** YouTube URLs in video pointers are downloaded server-side using `yt-dlp` with configurable duration and size limits, then base64-encoded and returned to the client.
+- **S3 and local filesystem base64 loading.** `get_media_base64_from_url()` in `backend/open_webui/utils/files.py` now supports `s3://` URIs (using project S3 credentials) and local filesystem paths (with path allowlist enforcement and size limits).
+- **"Attach Video URL/Path" UI action.** New modal (`AttachVideoPointerModal.svelte`) and menu item in the chat input menu allow users to attach videos by URL or path without uploading a file directly.
+- **Graceful fallback for remote-only videos.** When a video file is not locally previewable (e.g. `file://` pointers to model-server-local paths), the UI displays a placeholder card instead of a broken video player.
+- **Frontend API clients.** New `createVideoPointer()` in `src/lib/apis/files/index.ts` and `getVideoPointerConfig()`/`updateVideoPointerConfig()` in `src/lib/apis/configs/index.ts`.
+- **Optional frontend debug logging** for outbound LLM payloads via `localStorage.debug_llm_payload=1`.
+- **Docker yt-dlp installation.** Dockerfile installs `yt-dlp` from upstream binary release (supports x86_64 and aarch64).
+- Repository traceability: stored upstream patch reference in `patches/22248.patch`.
+
+### Changed
+
+- **Media base64 conversion generalized.** Backend middleware (`convert_url_media_to_base64`) expanded from images-only to image+video media conversion; both `image_url` and `video_url` items can be converted to base64 `data:` URIs before forwarding. `file://` URLs are passed through directly to model servers with filesystem access.
+- **`get_image_base64_from_url` refactored.** Now delegates to the new `get_media_base64_from_url()` which handles HTTP(S), S3, local filesystem, and internal file IDs with unified size-limit enforcement.
+- **Frontend URL resolution logic.** `MessageInput.svelte`, `UserMessage.svelte`, `ResponseMessage.svelte`, and `FileItemModal.svelte` now handle `s3://`, `file://`, and absolute local paths when constructing preview URLs, routing local paths through a new `/files/local/content` API proxy.
+- **`run.sh` adjusted** for local dev container workflow (network=host, no restart policy, ephemeral image rebuild).
+- **`docker-compose.yaml`** adds volume mount and `VIDEO_POINTER_ALLOWED_PATHS` environment variable.
+
+### Fixed
+
+- Chat payload construction now consistently injects image/video parts for user messages with attachments.
+- Misc UI issues in the parameter-passing interface for video-related controls.
+- `FileItemModal` video preview now correctly uses source URL/path metadata for pointer-backed items instead of assuming an internal file ID.
+- Null guard added to `get_image_base64_from_file_id()` when `file.path` is missing.
+
 ## [0.8.10] - 2026-03-08
 
 ### Added

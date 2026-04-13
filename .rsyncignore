@@ -1,0 +1,10 @@
+.ipynb
+.git/*
+.log
+.idea
+.vscode
+
+wandb/
+*/checkpoints
+GlimpseOfLean/*
+lean_example_project/*

@@ -94,6 +94,42 @@ export const uploadFile = async (
 	return res;
 };
 
+export const createVideoPointer = async (
+	token: string,
+	data: {
+		url_or_path: string;
+		name?: string | null;
+		content_type?: string | null;
+		size?: number | null;
+	}
+) => {
+	let error = null;
+	const res = await fetch(`${WEBUI_API_BASE_URL}/files/pointer`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(data)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail || err.message;
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const getFileProcessStatus = async (token: string, id: string) => {
 	const queryParams = new URLSearchParams();
 	queryParams.append('stream', 'true');

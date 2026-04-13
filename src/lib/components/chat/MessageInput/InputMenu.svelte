@@ -15,6 +15,7 @@
 	import Camera from '$lib/components/icons/Camera.svelte';
 	import Note from '$lib/components/icons/Note.svelte';
 	import Clip from '$lib/components/icons/Clip.svelte';
+	import Link from '$lib/components/icons/Link.svelte';
 	import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
 	import Refresh from '$lib/components/icons/Refresh.svelte';
 	import Agile from '$lib/components/icons/Agile.svelte';
@@ -27,7 +28,11 @@
 	import Notes from './InputMenu/Notes.svelte';
 	import Knowledge from './InputMenu/Knowledge.svelte';
 	import AttachWebpageModal from './AttachWebpageModal.svelte';
+	import AttachVideoPointerModal from './AttachVideoPointerModal.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
+
+	import { createVideoPointer } from '$lib/apis/files';
+	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 
@@ -45,11 +50,13 @@
 
 	export let onUpload: Function;
 	export let onClose: Function;
+	export let openVideoPointerModal: Function;
 
 	let show = false;
 	let tab = '';
 
 	let showAttachWebpageModal = false;
+	let showAttachVideoPointerModal = false;
 
 	let fileUploadEnabled = true;
 	$: fileUploadEnabled =
@@ -96,6 +103,34 @@
 	bind:show={showAttachWebpageModal}
 	onSubmit={(e) => {
 		onUpload(e);
+	}}
+/>
+
+<AttachVideoPointerModal
+	bind:show={showAttachVideoPointerModal}
+	onSubmit={async ({ url, name }) => {
+		try {
+			const result = await createVideoPointer(localStorage.token, {
+				url_or_path: url,
+				name: name || undefined
+			});
+			if (result) {
+				files = [
+					...files,
+					{
+						type: 'video',
+						url: result.url,
+						name: result.name ?? name ?? url,
+						content_type: result.content_type ?? 'video/mp4',
+						size: result.size ?? undefined,
+						meta: result.meta ?? {},
+						status: 'processed'
+					}
+				];
+			}
+		} catch (e) {
+			toast.error(typeof e === 'string' ? e : $i18n.t('Failed to attach video pointer.'));
+		}
 	}}
 />
 
@@ -205,6 +240,30 @@
 						>
 							<GlobeAlt />
 							<div class="line-clamp-1">{$i18n.t('Attach Webpage')}</div>
+						</DropdownMenu.Item>
+					</Tooltip>
+
+					<Tooltip
+						content={fileUploadCapableModels.length !== selectedModels.length
+							? $i18n.t('Model(s) do not support file upload')
+							: !fileUploadEnabled
+								? $i18n.t('You do not have permission to upload files.')
+								: ''}
+						className="w-full"
+					>
+						<DropdownMenu.Item
+							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!fileUploadEnabled
+								? 'opacity-50'
+								: ''}"
+							on:click={() => {
+								if (fileUploadEnabled) {
+									show = false;
+									showAttachVideoPointerModal = true;
+								}
+							}}
+						>
+							<Link />
+							<div class="line-clamp-1">{$i18n.t('Attach Video URL/Path')}</div>
 						</DropdownMenu.Item>
 					</Tooltip>
 

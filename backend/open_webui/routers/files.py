@@ -2,6 +2,11 @@ import logging
 import os
 import uuid
 import json
+import base64
+import mimetypes
+import re
+import tempfile
+import subprocess
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -50,6 +55,8 @@ from open_webui.storage.provider import Storage
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
+from open_webui.retrieval.utils import is_youtube_url
+from open_webui.retrieval.web.utils import validate_url
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
@@ -171,6 +178,326 @@ def process_uploaded_file(
     else:
         with SessionLocal() as db_session:
             _process_handler(db_session)
+
+
+class PointerForm(BaseModel):
+    url_or_path: str
+    name: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+
+
+class PointerResponse(BaseModel):
+    url: str
+    name: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+    meta: Optional[dict] = None
+
+
+def _is_path_allowed(path: str, allowed_paths: list[str]) -> bool:
+    if not allowed_paths:
+        return True
+    real_path = os.path.realpath(path)
+    log.info(str(real_path))
+    for base in allowed_paths:
+        base_real = os.path.realpath(base)
+        log.info(str(base_real))
+        if real_path == base_real or real_path.startswith(base_real):
+            return True
+    return False
+
+
+def _normalize_local_path(raw: str) -> str:
+    if raw.startswith("file://"):
+        return os.path.realpath(raw[7:])
+    return os.path.realpath(raw)
+
+
+def _guess_name_from_url(url: str) -> str:
+    return os.path.basename(url.split("?")[0].split("#")[0]) or "video"
+
+
+def _download_youtube_to_base64(request: Request, url: str) -> dict:
+    if not request.app.state.config.ENABLE_YOUTUBE_POINTERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("YouTube pointers are disabled"),
+        )
+
+    ytdlp_path = request.app.state.config.YTDLP_PATH
+    max_duration = request.app.state.config.YOUTUBE_MAX_DURATION_SECONDS
+    max_size_mb = request.app.state.config.VIDEO_POINTER_MAX_FILE_SIZE_MB
+
+    try:
+        info = subprocess.run(
+            [
+                ytdlp_path,
+                "--no-playlist",
+                "--dump-json",
+                url,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        metadata = json.loads(info.stdout)
+        duration = metadata.get("duration")
+        if duration and duration > max_duration:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("YouTube video exceeds duration limit"),
+            )
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Failed to resolve YouTube URL"),
+        )
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Failed to parse YouTube metadata"),
+        )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_template = os.path.join(temp_dir, "video.%(ext)s")
+        try:
+            subprocess.run(
+                [
+                    ytdlp_path,
+                    "--no-playlist",
+                    "-f",
+                    "best[ext=mp4]/best",
+                    "-o",
+                    output_template,
+                    url,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("Failed to download YouTube video"),
+            )
+
+        downloaded = None
+        for filename in os.listdir(temp_dir):
+            if filename.startswith("video."):
+                downloaded = os.path.join(temp_dir, filename)
+                break
+
+        if not downloaded or not os.path.isfile(downloaded):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("YouTube download failed"),
+            )
+
+        if max_size_mb and os.path.getsize(downloaded) > max_size_mb * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("YouTube video exceeds size limit"),
+            )
+
+        base64_url = None
+        with open(downloaded, "rb") as _f:
+            _content = _f.read()
+        _ct = mimetypes.guess_type(downloaded)[0] or "video/mp4"
+        base64_url = f"data:{_ct};base64,{base64.b64encode(_content).decode('utf-8')}"
+        if not base64_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("Failed to encode YouTube video"),
+            )
+
+        content_type = mimetypes.guess_type(downloaded)[0] or "video/mp4"
+        size = os.path.getsize(downloaded)
+        name = metadata.get("title") or "youtube-video"
+        if not name.endswith(".mp4"):
+            name = f"{name}.mp4"
+        return {
+            "url": base64_url,
+            "name": name,
+            "content_type": content_type,
+            "size": size,
+            "meta": {"source_url": url, "youtube": True},
+        }
+
+
+@router.post("/pointer", response_model=PointerResponse)
+def create_video_pointer(
+    request: Request,
+    form_data: PointerForm,
+    user=Depends(get_verified_user),
+):
+    raw = (form_data.url_or_path or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Pointer is required"),
+        )
+
+    allowed_schemes = request.app.state.config.VIDEO_POINTER_ALLOWED_SCHEMES
+    allowed_paths = request.app.state.config.VIDEO_POINTER_ALLOWED_PATHS
+    max_size_mb = request.app.state.config.VIDEO_POINTER_MAX_FILE_SIZE_MB
+
+    if is_youtube_url(raw):
+        if "youtube" not in allowed_schemes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("YouTube pointers are not allowed"),
+            )
+        return _download_youtube_to_base64(request, raw)
+
+    parsed = re.match(r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*):\/\/", raw)
+    scheme = parsed.group("scheme").lower() if parsed else None
+
+    if scheme in ("http", "https"):
+        if scheme not in allowed_schemes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("URL scheme is not allowed"),
+            )
+        try:
+            validate_url(raw)
+        except ValueError as e:
+            message = e.args[0] if e.args else "Invalid URL"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT(str(message)),
+            )
+        name = form_data.name or _guess_name_from_url(raw)
+        content_type = form_data.content_type or mimetypes.guess_type(name)[0]
+        return {
+            "url": raw,
+            "name": name,
+            "content_type": content_type,
+            "size": form_data.size,
+            "meta": {"source_url": raw},
+        }
+
+    if scheme == "s3" or raw.startswith("s3://"):
+        if "s3" not in allowed_schemes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("S3 pointers are not allowed"),
+            )
+        if not re.match(r"^s3://[^/]+/.+", raw):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("Invalid S3 URL format"),
+            )
+        name = form_data.name or _guess_name_from_url(raw)
+        content_type = form_data.content_type or mimetypes.guess_type(name)[0]
+        return {
+            "url": raw,
+            "name": name,
+            "content_type": content_type,
+            "size": form_data.size,
+            "meta": {"source_url": raw},
+        }
+
+    if scheme == "file" or os.path.isabs(raw):
+        if "file" not in allowed_schemes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("Local file pointers are not allowed"),
+            )
+        path = _normalize_local_path(raw)
+        if not allowed_paths and user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.DEFAULT("Local file access is restricted"),
+            )
+        log.info(str(path))
+        log.info(str(allowed_paths))
+        log.info(str(_is_path_allowed(path, allowed_paths)))
+        if allowed_paths and not _is_path_allowed(path, allowed_paths):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.DEFAULT("Path is not allowed"),
+            )
+        # if not os.path.isfile(path):
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail=ERROR_MESSAGES.DEFAULT("File not found"),
+        #     )
+        # if max_size_mb and os.path.getsize(path) > max_size_mb * 1024 * 1024:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail=ERROR_MESSAGES.DEFAULT("File exceeds size limit"),
+        #     )
+        name = form_data.name or os.path.basename(path)
+        content_type = form_data.content_type or mimetypes.guess_type(name)[0]
+
+        # Normalize local paths to a standard file:// URL.
+        # This avoids special-casing any particular local mount prefix (e.g. /fsx).
+        file_url = Path(path).as_uri()
+
+        # The file may not exist locally (e.g. the path is resolved by a
+        # remote model such as vLLM), so fall back to None when stat fails.
+        size = form_data.size
+        if size is None:
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                size = None
+
+        local_available = os.path.isfile(path)
+
+        return {
+            "url": file_url,
+            "name": name,
+            "content_type": content_type,
+            "size": size,
+            "meta": {"source_path": path, "local_available": local_available},
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=ERROR_MESSAGES.DEFAULT("Unsupported pointer"),
+    )
+
+
+@router.get("/local/content")
+async def get_local_file_content(
+    request: Request,
+    path: str = Query(..., description="Absolute path to the local file"),
+    user=Depends(get_verified_user),
+):
+    """Stream a local file that is under an allowed video-pointer path."""
+    allowed_paths: list[str] = request.app.state.config.VIDEO_POINTER_ALLOWED_PATHS
+
+    if not allowed_paths and user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.DEFAULT("Local file access is restricted"),
+        )
+    if allowed_paths and not _is_path_allowed(path, allowed_paths):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.DEFAULT("Path is not allowed"),
+        )
+
+    real_path = os.path.realpath(path)
+    if not os.path.isfile(real_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ERROR_MESSAGES.DEFAULT("File not found"),
+        )
+
+    content_type = mimetypes.guess_type(real_path)[0] or "application/octet-stream"
+    filename = os.path.basename(real_path)
+    encoded_filename = quote(filename)
+
+    return FileResponse(
+        real_path,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+        },
+    )
 
 
 @router.post("/", response_model=FileModelResponse)

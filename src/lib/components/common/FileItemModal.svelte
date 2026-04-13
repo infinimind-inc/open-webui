@@ -467,8 +467,14 @@ import Video from '$lib/components/common/Video.svelte';
                         </div>
                     </div>
                 {:else if isVideo}
+                    {@const videoSrc =
+                        (item?.meta?.source_url || item?.meta?.source_path)
+                            ? item.url
+                            : item?.id
+                                ? `${WEBUI_API_BASE_URL}/files/${item.id}/content`
+                                : item?.url ?? ''}
                     <Video
-                        src={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
+                        src={videoSrc}
                         className="w-full"
                         videoClassName="w-full max-h-[70vh] rounded-lg bg-black"
                         controls={true}
