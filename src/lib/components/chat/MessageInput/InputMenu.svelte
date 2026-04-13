@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { DropdownMenu } from 'bits-ui';
 	import { getContext, onMount, tick } from 'svelte';
 	import { fly } from 'svelte/transition';
-	import { flyAndScale } from '$lib/utils/transitions';
 
 	import { config, user, tools as _tools, mobile, knowledge } from '$lib/stores';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
@@ -157,13 +155,8 @@
 	</Tooltip>
 
 	<div slot="content">
-		<DropdownMenu.Content
-			class="w-full max-w-70 rounded-2xl px-1 py-1  border border-gray-100  dark:border-gray-800 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg max-h-72 overflow-y-auto overflow-x-hidden scrollbar-thin transition"
-			sideOffset={4}
-			alignOffset={-6}
-			side="bottom"
-			align="start"
-			transition={flyAndScale}
+		<div
+			class="w-70 rounded-2xl px-1 py-1 border border-gray-100 dark:border-gray-800 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg max-h-72 overflow-y-auto overflow-x-hidden scrollbar-thin transition"
 		>
 			{#if tab === ''}
 				<div in:fly={{ x: -20, duration: 150 }}>
@@ -175,10 +168,11 @@
 								: ''}
 						className="w-full"
 					>
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl {!fileUploadEnabled
+						<button
+							class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl {!fileUploadEnabled
 								? 'opacity-50'
 								: ''}"
+							type="button"
 							on:click={() => {
 								if (fileUploadEnabled) {
 									uploadFilesHandler();
@@ -188,7 +182,7 @@
 							<Clip />
 
 							<div class="line-clamp-1">{$i18n.t('Upload Files')}</div>
-						</DropdownMenu.Item>
+						</button>
 					</Tooltip>
 
 					<Tooltip
@@ -199,10 +193,11 @@
 								: ''}
 						className="w-full"
 					>
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50  rounded-xl {!fileUploadEnabled
+						<button
+							class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl {!fileUploadEnabled
 								? 'opacity-50'
 								: ''}"
+							type="button"
 							on:click={() => {
 								if (fileUploadEnabled) {
 									if (!detectMobile()) {
@@ -219,7 +214,7 @@
 						>
 							<Camera />
 							<div class=" line-clamp-1">{$i18n.t('Capture')}</div>
-						</DropdownMenu.Item>
+						</button>
 					</Tooltip>
 
 					<Tooltip
@@ -228,10 +223,11 @@
 							: ''}
 						className="w-full"
 					>
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!webUploadEnabled
+						<button
+							class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!webUploadEnabled
 								? 'opacity-50'
 								: ''}"
+							type="button"
 							on:click={() => {
 								if (webUploadEnabled) {
 									showAttachWebpageModal = true;
@@ -240,7 +236,7 @@
 						>
 							<GlobeAlt />
 							<div class="line-clamp-1">{$i18n.t('Attach Webpage')}</div>
-						</DropdownMenu.Item>
+						</button>
 					</Tooltip>
 
 					<Tooltip
@@ -361,8 +357,9 @@
 
 					{#if fileUploadEnabled}
 						{#if $config?.features?.enable_google_drive_integration}
-							<DropdownMenu.Item
-								class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
+							<button
+								class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl"
+								type="button"
 								on:click={() => {
 									uploadGoogleDriveHandler();
 								}}
@@ -394,7 +391,7 @@
 									/>
 								</svg>
 								<div class="line-clamp-1">{$i18n.t('Google Drive')}</div>
-							</DropdownMenu.Item>
+							</button>
 						{/if}
 
 						{#if $config?.features?.enable_onedrive_integration && ($config?.features?.enable_onedrive_personal || $config?.features?.enable_onedrive_business)}
@@ -580,8 +577,9 @@
 					</button>
 
 					{#if $config?.features?.enable_onedrive_personal}
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl text-left"
+						<button
+							class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl text-left"
+							type="button"
 							on:click={() => {
 								uploadOneDriveHandler('personal');
 							}}
@@ -589,12 +587,13 @@
 							<div class="flex flex-col">
 								<div class="line-clamp-1">{$i18n.t('Microsoft OneDrive (personal)')}</div>
 							</div>
-						</DropdownMenu.Item>
+						</button>
 					{/if}
 
 					{#if $config?.features?.enable_onedrive_business}
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl text-left"
+						<button
+							class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl text-left"
+							type="button"
 							on:click={() => {
 								uploadOneDriveHandler('organizations');
 							}}
@@ -605,10 +604,10 @@
 								</div>
 								<div class="text-xs text-gray-500">{$i18n.t('Includes SharePoint')}</div>
 							</div>
-						</DropdownMenu.Item>
+						</button>
 					{/if}
 				</div>
 			{/if}
-		</DropdownMenu.Content>
+		</div>
 	</div>
 </Dropdown>
