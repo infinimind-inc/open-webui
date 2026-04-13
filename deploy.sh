@@ -4,11 +4,14 @@ set -euo pipefail
 # ── Configuration ────────────────────────────────────────────────────────────
 AWS_ACCOUNT_ID="262740798135"
 AWS_REGION="us-east-2"
+AWS_PROFILE="${AWS_PROFILE:-im-dev}"
 ECR_REPO="deepframe/open-webui"
 REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
 NAMESPACE="deepframe"
-DEPLOYMENT="open-webui-dev"
+DEPLOYMENT="open-webui"
 CONTAINER="open-webui"
+
+export AWS_PROFILE
 
 # ── Determine image tag ─────────────────────────────────────────────────────
 IMAGE_TAG="${1:-$(git rev-parse --short HEAD)}"
@@ -20,8 +23,8 @@ echo "==> Full image: ${FULL_IMAGE}"
 echo ""
 
 # ── Step 1: Authenticate to ECR ─────────────────────────────────────────────
-echo "==> Authenticating to ECR..."
-aws ecr get-login-password --region "${AWS_REGION}" | \
+echo "==> Authenticating to ECR (profile: ${AWS_PROFILE})..."
+aws ecr get-login-password --region "${AWS_REGION}" --profile "${AWS_PROFILE}" | \
   docker login --username AWS --password-stdin \
   "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 echo ""

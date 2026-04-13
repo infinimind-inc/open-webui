@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: open-webui-dev
+  name: open-webui
   namespace: deepframe
   labels:
     app: open-webui
     env: dev
-    run: open-webui-dev
+    run: open-webui
 spec:
   replicas: 1
   revisionHistoryLimit: 3
@@ -14,13 +14,13 @@ spec:
     matchLabels:
       app: open-webui
       env: dev
-      run: open-webui-dev
+      run: open-webui
   template:
     metadata:
       labels:
         app: open-webui
         env: dev
-        run: open-webui-dev
+        run: open-webui
     spec:
       containers:
         - name: open-webui
@@ -32,19 +32,15 @@ spec:
           env:
             - name: PORT
               value: "8080"
-            - name: ENABLE_OPENAI_API
-              value: "true"
             - name: OPENAI_API_BASE_URLS
-              value: "http://df-model-gemma4-31b-it-nvfp4-dev-predictor/v1;http://df-model-deepframe-dev-predictor/v1"
+              value: "http://df-model-deepframe-dev:8000/v1;http://brev-up8gmd44c:5566/v1"
             - name: OPENAI_API_KEYS
-              value: "local-dev-key;local-dev-key"
-            - name: AUDIO_STT_SUPPORTED_CONTENT_TYPES
-              value: "audio/*,video/webm,video/mp4"
-            - name: CORS_ALLOW_ORIGIN
-              value: "*"
+              value: "potato;potato"
+            - name: VIDEO_POINTER_ALLOWED_PATHS
+              value: "/"
           envFrom:
             - secretRef:
-                name: open-webui-secret-dev
+                name: open-webui-secret
           resources:
             requests:
               cpu: 250m
@@ -69,7 +65,12 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/backend/data
+            - name: fsx-data
+              mountPath: /data
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: open-webui-data-dev
+            claimName: open-webui-data
+        - name: fsx-data
+          persistentVolumeClaim:
+            claimName: fsx-deepframe-pvc-dev

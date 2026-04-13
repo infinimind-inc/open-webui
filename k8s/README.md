@@ -23,7 +23,7 @@ aws ecr create-repository \
 ### 2. Create the Secret (if not already exists)
 
 ```bash
-kubectl create secret generic open-webui-secret-dev \
+kubectl create secret generic open-webui-secret \
   --namespace deepframe \
   --from-literal=WEBUI_SECRET_KEY="$(openssl rand -hex 32)"
 ```
@@ -58,14 +58,14 @@ docker build -t $REGISTRY:$IMAGE_TAG --build-arg BUILD_HASH=$IMAGE_TAG .
 docker push $REGISTRY:$IMAGE_TAG
 
 # Deploy
-kubectl set image deployment/open-webui-dev \
+kubectl set image deployment/open-webui \
   open-webui=$REGISTRY:$IMAGE_TAG -n deepframe
-kubectl rollout status deployment/open-webui-dev -n deepframe
+kubectl rollout status deployment/open-webui -n deepframe
 ```
 
 ## Access
 
-The service is exposed via Tailscale at: `https://df-open-webui-dev.<your-tailnet>`
+The service is exposed via Tailscale at: `https://df-open-webui.<your-tailnet>`
 
 ## File Overview
 
@@ -73,6 +73,19 @@ The service is exposed via Tailscale at: `https://df-open-webui-dev.<your-tailne
 |------|-------------|
 | `pvc.yaml` | 20Gi gp3 PersistentVolumeClaim for `/app/backend/data` |
 | `secret.yaml` | Template only -- use `kubectl create secret` for real values |
-| `deployment.yaml` | Deployment: custom ECR image, env vars, probes, resource limits |
+| `deployment.yaml` | Deployment: custom ECR image, env vars, probes, resource limits, FSX mount |
 | `service.yaml` | ClusterIP service with Tailscale proxy annotations |
 | `kustomization.yaml` | Kustomize entrypoint (applies pvc, deployment, service) |
+
+## Cleanup of Old Resources
+
+After deploying, remove the old `-dev` suffixed resources:
+
+```bash
+kubectl delete deployment open-webui-dev -n deepframe
+kubectl delete service open-webui-dev -n deepframe
+kubectl delete ingress open-webui-dev -n deepframe
+kubectl delete configmap open-webui-patches-dev -n deepframe
+# Only after confirming data is migrated or no longer needed:
+# kubectl delete pvc open-webui-data-dev -n deepframe
+```
