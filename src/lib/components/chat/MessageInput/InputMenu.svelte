@@ -48,7 +48,6 @@
 
 	export let onUpload: Function;
 	export let onClose: Function;
-	export let openVideoPointerModal: Function;
 
 	let show = false;
 	let tab = '';
@@ -247,20 +246,21 @@
 								: ''}
 						className="w-full"
 					>
-						<DropdownMenu.Item
-							class="flex gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!fileUploadEnabled
-								? 'opacity-50'
-								: ''}"
-							on:click={() => {
-								if (fileUploadEnabled) {
-									show = false;
-									showAttachVideoPointerModal = true;
-								}
-							}}
-						>
-							<Link />
-							<div class="line-clamp-1">{$i18n.t('Attach Video URL/Path')}</div>
-						</DropdownMenu.Item>
+					<button
+						class="flex w-full gap-2 items-center px-3 py-1.5 text-sm select-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!fileUploadEnabled
+							? 'opacity-50'
+							: ''}"
+						type="button"
+						on:click={() => {
+							if (fileUploadEnabled) {
+								show = false;
+								showAttachVideoPointerModal = true;
+							}
+						}}
+					>
+						<Link />
+						<div class="line-clamp-1">{$i18n.t('Attach Video URL/Path')}</div>
+					</button>
 					</Tooltip>
 
 					{#if $config?.features?.enable_notes ?? false}

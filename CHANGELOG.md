@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-14
+
+### Added
+- `AGENTS.md` with instructions for running the repo locally via Docker.
+
+### Fixed
+- Streaming response handler now correctly handles orphaned `</think>` end tags (emitted by models like `nvidia/nemotron` via vLLM) by retroactively converting prior message content into a completed reasoning block.
+
+### Changed
+- Updated deployment endpoint URL in `run.sh`.
+- "Attach Video URL/Path" menu item in chat input replaced with a plain `<button>` element; removed unused `openVideoPointerModal` prop.
+
+---
+
 ## [Unreleased] - 2026-04-13
 
 Local changes since `d562e9d20e49d1e3522e6bf0d555380550e1f349` (includes uncommitted working tree changes).

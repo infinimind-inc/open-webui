@@ -61,7 +61,6 @@ from open_webui.routers.memories import query_memory, QueryMemoryForm
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.files import (
     convert_markdown_base64_images,
-    get_file_base64_from_url,
     get_file_url_from_base64,
     get_image_base64_from_url,
     get_image_url_from_base64,
@@ -3532,6 +3531,7 @@ async def streaming_chat_response_handler(response, ctx):
                 if last_type == 'message':
                     # Use the output item's own text for tag detection
                     item_text = get_last_text(output)
+                    found_start_tag = False
                     for start_tag, end_tag in tags:
                         start_tag_pattern = rf'{re.escape(start_tag)}'
                         if start_tag.startswith('<') and start_tag.endswith('>'):
@@ -3541,6 +3541,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                         match = re.search(start_tag_pattern, item_text)
                         if match:
+                            found_start_tag = True
                             try:
                                 attr_content = match.group(1) if match.group(1) else ''
                             except Exception:
@@ -3629,6 +3630,67 @@ async def streaming_chat_response_handler(response, ctx):
                                     end_flag = True
 
                             break
+
+                    # Handle orphaned end tags (no matching start tag found).
+                    # Some models (e.g. nvidia/nemotron via vLLM) emit thinking
+                    # content directly in the content field without a <think>
+                    # opening tag (it is part of the chat template's assistant
+                    # prefix).  Only the </think> closing tag appears as a
+                    # generated token.  When this happens we retroactively
+                    # convert all prior message content into a completed
+                    # reasoning block and start a fresh message with the
+                    # leftover text after the end tag.
+                    if not found_start_tag and content_type == 'reasoning':
+                        for start_tag, end_tag in tags:
+                            end_tag_pattern = rf'{re.escape(end_tag)}'
+                            end_match = re.search(end_tag_pattern, item_text)
+                            if end_match:
+                                end_flag = True
+                                reasoning_text = item_text[: end_match.start()].strip()
+                                leftover = item_text[end_match.end() :].strip()
+
+                                # Replace the current message item with a
+                                # completed reasoning block + new message.
+                                if output and output[-1].get('type') == 'message':
+                                    output.pop()
+
+                                if reasoning_text:
+                                    output.append(
+                                        {
+                                            'type': 'reasoning',
+                                            'id': output_id('r'),
+                                            'status': 'completed',
+                                            'start_tag': start_tag,
+                                            'end_tag': end_tag,
+                                            'attributes': {},
+                                            'content': [
+                                                {
+                                                    'type': 'output_text',
+                                                    'text': reasoning_text,
+                                                }
+                                            ],
+                                            'summary': None,
+                                            'started_at': time.time(),
+                                            'ended_at': time.time(),
+                                            'duration': 0,
+                                        }
+                                    )
+
+                                output.append(
+                                    {
+                                        'type': 'message',
+                                        'id': output_id('msg'),
+                                        'status': 'in_progress',
+                                        'role': 'assistant',
+                                        'content': [
+                                            {
+                                                'type': 'output_text',
+                                                'text': leftover,
+                                            }
+                                        ],
+                                    }
+                                )
+                                break
 
                 elif (
                     (last_type == 'reasoning' and content_type == 'reasoning')
