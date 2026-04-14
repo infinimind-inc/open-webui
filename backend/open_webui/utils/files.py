@@ -75,7 +75,7 @@ def _is_path_allowed(path: str, allowed_paths: list[str]) -> bool:
     real_path = os.path.realpath(path)
     for base in allowed_paths:
         base_real = os.path.realpath(base)
-        if real_path == base_real or real_path.startswith(base_real + os.sep):
+        if base_real == os.path.commonpath(base_real, real_path):
             return True
     return False
 
@@ -213,7 +213,9 @@ def load_b64_audio_data(b64_str):
             b64_data = b64_str
             header = 'data:audio/wav;base64'
         audio_data = base64.b64decode(b64_data)
-        content_type = header.split(';')[0].split(':')[1] if ';' in header else 'audio/wav'
+        content_type = (
+            header.split(';')[0].split(':')[1] if ';' in header else 'audio/wav'
+        )
         return audio_data, content_type
     except Exception as e:
         print(f'Error decoding base64 audio data: {e}')

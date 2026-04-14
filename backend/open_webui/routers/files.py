@@ -114,15 +114,21 @@ def process_uploaded_file(
                     content_type = 'text/plain'
 
             if content_type:
-                stt_supported_content_types = getattr(request.app.state.config, 'STT_SUPPORTED_CONTENT_TYPES', [])
+                stt_supported_content_types = getattr(
+                    request.app.state.config, 'STT_SUPPORTED_CONTENT_TYPES', []
+                )
 
                 if strict_match_mime_type(stt_supported_content_types, content_type):
                     file_path_processed = Storage.get_file(file_path)
-                    result = transcribe(request, file_path_processed, file_metadata, user)
+                    result = transcribe(
+                        request, file_path_processed, file_metadata, user
+                    )
 
                     process_file(
                         request,
-                        ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
+                        ProcessFileForm(
+                            file_id=file_item.id, content=result.get('text', '')
+                        ),
                         user=user,
                         db=db_session,
                     )
@@ -149,7 +155,9 @@ def process_uploaded_file(
                             f"File type {content_type} is not supported for processing"
                         )
             else:
-                log.info(f'File type {file.content_type} is not provided, but trying to process anyway')
+                log.info(
+                    f'File type {file.content_type} is not provided, but trying to process anyway'
+                )
                 process_file(
                     request,
                     ProcessFileForm(file_id=file_item.id),
@@ -198,7 +206,7 @@ def _is_path_allowed(path: str, allowed_paths: list[str]) -> bool:
     for base in allowed_paths:
         base_real = os.path.realpath(base)
         log.info(str(base_real))
-        if real_path == base_real or real_path.startswith(base_real):
+        if base_real == os.path.commonpath([real_path, base_real]):
             return True
     return False
 
@@ -230,7 +238,7 @@ def _download_youtube_to_base64(request: Request, url: str) -> dict:
                 ytdlp_path,
                 "--no-playlist",
                 "--dump-json",
-                url,
+                f"-- {url}",
             ],
             check=True,
             capture_output=True,
@@ -556,7 +564,9 @@ def upload_file_handler(
             if file_extension not in request.app.state.config.ALLOWED_FILE_EXTENSIONS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT(f'File type {file_extension} is not allowed'),
+                    detail=ERROR_MESSAGES.DEFAULT(
+                        f'File type {file_extension} is not allowed'
+                    ),
                 )
 
         # replace filename with uuid
@@ -586,7 +596,11 @@ def upload_file_handler(
                     },
                     'meta': {
                         'name': name,
-                        'content_type': (file.content_type if isinstance(file.content_type, str) else None),
+                        'content_type': (
+                            file.content_type
+                            if isinstance(file.content_type, str)
+                            else None
+                        ),
                         'size': len(contents),
                         'data': file_metadata,
                     },
@@ -596,9 +610,13 @@ def upload_file_handler(
         )
 
         if 'channel_id' in file_metadata:
-            channel = Channels.get_channel_by_id_and_user_id(file_metadata['channel_id'], user.id, db=db)
+            channel = Channels.get_channel_by_id_and_user_id(
+                file_metadata['channel_id'], user.id, db=db
+            )
             if channel:
-                Channels.add_file_to_channel_by_id(channel.id, file_item.id, user.id, db=db)
+                Channels.add_file_to_channel_by_id(
+                    channel.id, file_item.id, user.id, db=db
+                )
 
         if process:
             if background_tasks and process_in_background:
@@ -658,7 +676,9 @@ async def list_files(
     db: Session = Depends(get_session),
 ):
     skip = (page - 1) * PAGE_SIZE
-    user_id = None if (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL) else user.id
+    user_id = (
+        None if (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL) else user.id
+    )
 
     result = Files.get_file_list(user_id=user_id, skip=skip, limit=PAGE_SIZE, db=db)
 
@@ -683,7 +703,9 @@ async def search_files(
     ),
     content: bool = Query(True),
     skip: int = Query(0, ge=0, description='Number of files to skip'),
-    limit: int = Query(100, ge=1, le=1000, description='Maximum number of files to return'),
+    limit: int = Query(
+        100, ge=1, le=1000, description='Maximum number of files to return'
+    ),
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -692,7 +714,9 @@ async def search_files(
     Uses SQL-based filtering with pagination for better performance.
     """
     # Determine user_id: null for admin with bypass (search all), user.id otherwise
-    user_id = None if (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL) else user.id
+    user_id = (
+        None if (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL) else user.id
+    )
 
     # Use optimized database query with pagination
     files = Files.search_files(
@@ -723,7 +747,9 @@ async def search_files(
 
 
 @router.delete('/all')
-async def delete_all_files(user=Depends(get_admin_user), db: Session = Depends(get_session)):
+async def delete_all_files(
+    user=Depends(get_admin_user), db: Session = Depends(get_session)
+):
     result = Files.delete_all_files(db=db)
     if result:
         try:
@@ -750,7 +776,9 @@ async def delete_all_files(user=Depends(get_admin_user), db: Session = Depends(g
 
 
 @router.get('/{id}', response_model=Optional[FileModel])
-async def get_file_by_id(id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)):
+async def get_file_by_id(
+    id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)
+):
     file = Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -759,7 +787,11 @@ async def get_file_by_id(id: str, user=Depends(get_verified_user), db: Session =
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         return file
     else:
         raise HTTPException(
@@ -783,7 +815,11 @@ async def get_file_process_status(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         if stream:
             MAX_FILE_PROCESSING_DURATION = 3600 * 2
 
@@ -833,7 +869,9 @@ async def get_file_process_status(
 
 
 @router.get('/{id}/data/content')
-async def get_file_data_content_by_id(id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)):
+async def get_file_data_content_by_id(
+    id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)
+):
     file = Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -842,7 +880,11 @@ async def get_file_data_content_by_id(id: str, user=Depends(get_verified_user), 
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         return {'content': file.data.get('content', '')}
     else:
         raise HTTPException(
@@ -876,7 +918,11 @@ def update_file_data_content_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'write', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'write', user, db=db)
+    ):
         try:
             process_file(
                 request,
@@ -896,7 +942,9 @@ def update_file_data_content_by_id(
         for knowledge in knowledges:
             try:
                 # Remove old embeddings for this file from the KB collection
-                VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'file_id': id})
+                VECTOR_DB_CLIENT.delete(
+                    collection_name=knowledge.id, filter={'file_id': id}
+                )
                 # Re-add from the now-updated file-{file_id} collection
                 process_file(
                     request,
@@ -905,7 +953,9 @@ def update_file_data_content_by_id(
                     db=db,
                 )
             except Exception as e:
-                log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
+                log.warning(
+                    f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}'
+                )
 
         return {'content': file.data.get('content', '')}
     else:
@@ -935,7 +985,11 @@ async def get_file_content_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         try:
             file_path = Storage.get_file(file.path)
             file_path = Path(file_path)
@@ -952,13 +1006,21 @@ async def get_file_content_by_id(
                 headers = {}
 
                 if attachment:
-                    headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+                    headers['Content-Disposition'] = (
+                        f"attachment; filename*=UTF-8''{encoded_filename}"
+                    )
                 else:
-                    if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
-                        headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
+                    if content_type == 'application/pdf' or filename.lower().endswith(
+                        '.pdf'
+                    ):
+                        headers['Content-Disposition'] = (
+                            f"inline; filename*=UTF-8''{encoded_filename}"
+                        )
                         content_type = 'application/pdf'
                     elif content_type != 'text/plain':
-                        headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+                        headers['Content-Disposition'] = (
+                            f"attachment; filename*=UTF-8''{encoded_filename}"
+                        )
 
                 return FileResponse(file_path, headers=headers, media_type=content_type)
 
@@ -984,7 +1046,9 @@ async def get_file_content_by_id(
 
 
 @router.get('/{id}/content/html')
-async def get_html_file_content_by_id(id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)):
+async def get_html_file_content_by_id(
+    id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)
+):
     file = Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -1000,7 +1064,11 @@ async def get_html_file_content_by_id(id: str, user=Depends(get_verified_user), 
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         try:
             file_path = Storage.get_file(file.path)
             file_path = Path(file_path)
@@ -1031,7 +1099,9 @@ async def get_html_file_content_by_id(id: str, user=Depends(get_verified_user), 
 
 
 @router.get('/{id}/content/{file_name}')
-async def get_file_content_by_id(id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)):
+async def get_file_content_by_id(
+    id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)
+):
     file = Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -1040,13 +1110,19 @@ async def get_file_content_by_id(id: str, user=Depends(get_verified_user), db: S
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'read', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'read', user, db=db)
+    ):
         file_path = file.path
 
         # Handle Unicode filenames
         filename = file.meta.get('name', file.filename)
         encoded_filename = quote(filename)  # RFC5987 encoding
-        headers = {'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}"}
+        headers = {
+            'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
 
         if file_path:
             file_path = Storage.get_file(file_path)
@@ -1087,7 +1163,9 @@ async def get_file_content_by_id(id: str, user=Depends(get_verified_user), db: S
 
 
 @router.delete('/{id}')
-async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)):
+async def delete_file_by_id(
+    id: str, user=Depends(get_verified_user), db: Session = Depends(get_session)
+):
     file = Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -1096,7 +1174,11 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: Sessio
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if file.user_id == user.id or user.role == 'admin' or has_access_to_file(id, 'write', user, db=db):
+    if (
+        file.user_id == user.id
+        or user.role == 'admin'
+        or has_access_to_file(id, 'write', user, db=db)
+    ):
         # Clean up KB associations and embeddings before deleting
         knowledges = Knowledges.get_knowledges_by_file_id(id, db=db)
         for knowledge in knowledges:
@@ -1104,9 +1186,13 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: Sessio
             Knowledges.remove_file_from_knowledge_by_id(knowledge.id, id, db=db)
             # Clean KB embeddings (same logic as /knowledge/{id}/file/remove)
             try:
-                VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'file_id': id})
+                VECTOR_DB_CLIENT.delete(
+                    collection_name=knowledge.id, filter={'file_id': id}
+                )
                 if file.hash:
-                    VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'hash': file.hash})
+                    VECTOR_DB_CLIENT.delete(
+                        collection_name=knowledge.id, filter={'hash': file.hash}
+                    )
             except Exception as e:
                 log.debug(f'KB embedding cleanup for {knowledge.id}: {e}')
 

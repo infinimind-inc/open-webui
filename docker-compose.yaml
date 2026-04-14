@@ -21,9 +21,6 @@ services:
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
     environment:
-      - 'OPENAI_API_BASE_URLS=http://df-model-deepframe-dev:8000/v1;http://brev-up8gmd44c:5566/v1'
-      - 'OPENAI_API_KEYS=potato;potato'
-      - 'VIDEO_POINTER_ALLOWED_PATHS=/'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped

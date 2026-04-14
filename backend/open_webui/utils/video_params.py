@@ -1,11 +1,8 @@
 from typing import Callable, Dict
 
-VIDEO_PARAM_ALLOWLIST: Dict[
-    str, Dict[str, Callable[[str], bool] | list[str]]
-] = {
+VIDEO_PARAM_ALLOWLIST: Dict[str, Dict[str, Callable[[str], bool] | list[str]]] = {
     "qwen_3_5": {
-        "match": lambda model_id: "qwen" in model_id.lower()
-        and "3.5" in model_id,
+        "match": lambda model_id: "qwen" in model_id.lower() and "3.5" in model_id,
         "allowed_params": ["mm_processor_kwargs"],
     },
     "gemma_4": {
@@ -16,7 +13,7 @@ VIDEO_PARAM_ALLOWLIST: Dict[
     "deepframe": {
         "match": lambda model_id: "infinimind/deepframe" in model_id.lower(),
         "allowed_params": ["mm_processor_kwargs"],
-    }
+    },
 }
 
 
