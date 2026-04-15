@@ -2086,13 +2086,13 @@
 		});
 
 		let files = structuredClone(chatFiles);
-		files.push(
-			...(userMessage?.files ?? []).filter(
-				(item) =>
-					['doc', 'text', 'note', 'chat', 'collection'].includes(item.type) ||
-					(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
-			)
-		);
+        files.push(
+            ...(userMessage?.files ?? []).filter(
+                (item) =>
+                    ['doc', 'text', 'note', 'chat', 'collection', 'video'].includes(item.type) ||
+                    (item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
+            )
+        );
 		// Remove duplicates
 		files = files.filter(
 			(item, index, array) =>
@@ -2123,6 +2123,12 @@
 			params?.stream_response ??
 			true;
 
+		const videoControlParams = params?.video ?? {};
+		const parsedVideoFps = Number(videoControlParams?.fps);
+		const videoFps = Number.isFinite(parsedVideoFps) && parsedVideoFps > 0 ? parsedVideoFps : undefined;
+
+		const { video: _omitVideo, ...paramsWithoutVideo } = params ?? {};
+
 		let messages = [
 			params?.system || $settings.system
 				? {
@@ -2143,29 +2149,52 @@
 				const imageFiles = (message?.files ?? []).filter(
 					(file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
 				);
+				const videoFiles = (message?.files ?? []).filter(
+					(file) => file.type === 'video' || (file?.content_type ?? '').startsWith('video/')
+				);
+
+				const hasMedia = imageFiles.length > 0 || videoFiles.length > 0;
+				const baseContent = message?.merged?.content ?? message.content;
+
+				if (message.role !== 'user' || !hasMedia) {
+					return {
+						role: message.role,
+						content: baseContent
+					};
+				}
+
+				const mediaContent = [];
+
+				if (Array.isArray(baseContent)) {
+					mediaContent.push(...baseContent);
+				} else if (typeof baseContent === 'string') {
+					mediaContent.push({
+						type: 'text',
+						text: baseContent
+					});
+				} else if (baseContent) {
+					mediaContent.push(baseContent);
+				}
+
+				mediaContent.push(
+					...imageFiles.map((file) => ({
+						type: 'image_url',
+						image_url: {
+							url: file.url
+						}
+					})),
+					...videoFiles.map((file) => ({
+						type: 'video_url',
+						video_url: {
+							url: file.url
+						},
+						...(videoFps ? { fps: videoFps } : {})
+					}))
+				);
 
 				return {
 					role: message.role,
-					// Preserve output items so backend can reconstruct tool_calls/tool-role messages (temp chats)
-					...(message.output ? { output: message.output } : {}),
-					...(message.role === 'user' && imageFiles.length > 0
-						? {
-								content: [
-									{
-										type: 'text',
-										text: message?.merged?.content ?? message.content
-									},
-									...imageFiles.map((file) => ({
-										type: 'image_url',
-										image_url: {
-											url: file.url
-										}
-									}))
-								]
-							}
-						: {
-								content: message?.merged?.content ?? message.content
-							})
+					content: mediaContent
 				};
 			})
 			.filter((message) => message?.role === 'user' || message?.content?.trim());
@@ -2225,72 +2254,77 @@
 		// Use the user-selected terminal from the dropdown
 		const activeTerminalId = $selectedTerminalId ?? null;
 
+		const payload = {
+			stream: stream,
+			model: model.id,
+			messages: messages,
+			params: {
+				...$settings?.params,
+				...paramsWithoutVideo,
+				stop: getStopTokens()
+			},
+
+			files: (files?.length ?? 0) > 0 ? files : undefined,
+
+			filter_ids: selectedFilterIds.length > 0 ? selectedFilterIds : undefined,
+			tool_ids: toolIds.length > 0 ? toolIds : undefined,
+			skill_ids: skillIds.length > 0 ? skillIds : undefined,
+			terminal_id: activeTerminalId ?? undefined,
+			tool_servers: [
+				...($toolServers ?? []).filter(
+					(server, idx) => toolServerIds.includes(idx) || toolServerIds.includes(server?.id)
+				),
+				// Direct terminal servers — always included when enabled (not routed through selectedToolIds)
+				...($terminalServers ?? []).filter((t) => !t.id)
+			],
+			features: getFeatures(),
+			variables: {
+				...getPromptVariables(
+					$user?.name,
+					$settings?.userLocation ? userLocation : undefined,
+					$user?.email
+				)
+			},
+			model_item: $models.find((m) => m.id === model.id),
+
+			session_id: $socket?.id,
+			chat_id: $chatId,
+
+			id: responseMessageId,
+			parent_id: userMessage?.id ?? null,
+			parent_message: userMessage,
+
+			background_tasks: {
+				...(!$temporaryChatEnabled &&
+				(messages.length == 1 ||
+					(messages.length == 2 &&
+						messages.at(0)?.role === 'system' &&
+						messages.at(1)?.role === 'user')) &&
+				(selectedModels[0] === model.id || atSelectedModel !== undefined)
+					? {
+							title_generation: $settings?.title?.auto ?? true,
+							tags_generation: $settings?.autoTags ?? true
+						}
+					: {}),
+				follow_up_generation: $settings?.autoFollowUps ?? true
+			},
+
+			...(stream && (model.info?.meta?.capabilities?.usage ?? false)
+				? {
+						stream_options: {
+							include_usage: true
+						}
+					}
+				: {})
+		};
+
+		if (localStorage?.debug_llm_payload === '1') {
+			console.info('[LLM request payload]', payload);
+		}
+
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
-			{
-				stream: stream,
-				model: model.id,
-				messages: messages,
-				params: {
-					...$settings?.params,
-					...params,
-					stop: getStopTokens()
-				},
-
-				files: (files?.length ?? 0) > 0 ? files : undefined,
-
-				filter_ids: selectedFilterIds.length > 0 ? selectedFilterIds : undefined,
-				tool_ids: toolIds.length > 0 ? toolIds : undefined,
-				skill_ids: skillIds.length > 0 ? skillIds : undefined,
-				terminal_id: activeTerminalId ?? undefined,
-				tool_servers: [
-					...($toolServers ?? []).filter(
-						(server, idx) => toolServerIds.includes(idx) || toolServerIds.includes(server?.id)
-					),
-					// Direct terminal servers — always included when enabled (not routed through selectedToolIds)
-					...($terminalServers ?? []).filter((t) => !t.id)
-				],
-				features: getFeatures(),
-				variables: {
-					...getPromptVariables(
-						$user?.name,
-						$settings?.userLocation ? userLocation : undefined,
-						$user?.email
-					)
-				},
-				model_item: $models.find((m) => m.id === model.id),
-
-				session_id: $socket?.id,
-				chat_id: $chatId,
-				folder_id: $selectedFolder?.id ?? undefined,
-
-				id: responseMessageId,
-				parent_id: userMessage?.id ?? null,
-				parent_message: userMessage,
-
-				background_tasks: {
-					...(!$temporaryChatEnabled &&
-					(messages.length == 1 ||
-						(messages.length == 2 &&
-							messages.at(0)?.role === 'system' &&
-							messages.at(1)?.role === 'user')) &&
-					(selectedModels[0] === model.id || atSelectedModel !== undefined)
-						? {
-								title_generation: $settings?.title?.auto ?? true,
-								tags_generation: $settings?.autoTags ?? true
-							}
-						: {}),
-					follow_up_generation: $settings?.autoFollowUps ?? true
-				},
-
-				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
-					? {
-							stream_options: {
-								include_usage: true
-							}
-						}
-					: {})
-			},
+			payload,
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
 			console.log(error);

@@ -132,11 +132,22 @@ RUN apt-get update && \
     ffmpeg libsm6 libxext6 zstd \
     && rm -rf /var/lib/apt/lists/*
 
+# Install yt-dlp (YouTube download helper) via upstream binary release
+# Package-manager installs are not available in this environment.
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64|amd64) ytdlp_url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" ;; \
+      aarch64|arm64) ytdlp_url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64" ;; \
+      *) ytdlp_url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" ;; \
+    esac; \
+    curl -fsSL --retry 3 --retry-delay 2 -o /usr/local/bin/yt-dlp "$ytdlp_url"; \
+    chmod 0755 /usr/local/bin/yt-dlp; \
+    /usr/local/bin/yt-dlp --version
+
 # install python dependencies
 COPY --chown=$UID:$GID ./backend/requirements.txt ./requirements.txt
-
-RUN set -e; \
-    pip3 install --no-cache-dir uv; \
+RUN pip3 install --no-cache-dir uv && \
     if [ "$USE_CUDA" = "true" ]; then \
     # If you use CUDA the whisper and embedding model will be downloaded on first use
     # fix: pin torch<=2.9.1 - torch 2.10.0 aarch64 wheels cause SIGILL on ARM devices (RPi 4 Cortex-A72) #21349

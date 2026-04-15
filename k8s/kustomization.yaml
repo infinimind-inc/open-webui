@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: deepframe
+
+resources:
+  - pvc.yaml
+  # secret.yaml is excluded by default — manage secrets via kubectl or a secrets manager.
+  # Uncomment the line below ONLY if you have replaced the placeholder value:
+  # - secret.yaml
+  - deployment.yaml
+  - service.yaml

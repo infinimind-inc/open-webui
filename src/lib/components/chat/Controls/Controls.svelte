@@ -8,10 +8,12 @@
 	import Valves from '$lib/components/chat/Controls/Valves.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
+	import VideoControls from '$lib/components/chat/Controls/VideoControls.svelte';
 
 	import { user, settings } from '$lib/stores';
 	export let models = [];
 	export let chatFiles = [];
+	export let files = [];
 	export let params = {};
 	export let embed = false;
 
@@ -28,6 +30,11 @@
 	let showValves = getOpen('valves', false);
 	let showSystemPrompt = getOpen('systemPrompt');
 	let showAdvancedParams = getOpen('advancedParams');
+	let showVideo = getOpen('video', false);
+
+	const isVideoFile = (file) =>
+		file?.type === 'video' || (file?.content_type ?? '').startsWith('video/');
+	$: hasVideoFiles = [...(chatFiles ?? []), ...(files ?? [])]?.some?.(isVideoFile) ?? false;
 </script>
 
 <div class=" dark:text-white">
@@ -93,6 +100,21 @@
 				>
 					<div class="text-sm" slot="content">
 						<Valves show={showValves} />
+					</div>
+				</Collapsible>
+
+				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+			{/if}
+
+			{#if hasVideoFiles}
+				<Collapsible
+					title={$i18n.t('Video')}
+					bind:open={showVideo}
+					onChange={setOpen('video')}
+					buttonClassName="w-full"
+				>
+					<div class="text-sm mt-1.5" slot="content">
+						<VideoControls {models} bind:params />
 					</div>
 				</Collapsible>
 

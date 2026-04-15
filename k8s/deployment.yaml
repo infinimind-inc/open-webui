@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: deepframe
+  labels:
+    app: open-webui
+    env: dev
+    run: open-webui
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: open-webui
+      env: dev
+      run: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+        env: dev
+        run: open-webui
+    spec:
+      containers:
+        - name: open-webui
+          image: 262740798135.dkr.ecr.us-east-2.amazonaws.com/deepframe/open-webui:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: PORT
+              value: "8080"
+            - name: OPENAI_API_BASE_URLS
+              value: "http://df-model-deepframe-dev:8000/v1;http://brev-up8gmd44c:5566/v1"
+            - name: OPENAI_API_KEYS
+              value: "potato;potato"
+            - name: VIDEO_POINTER_ALLOWED_PATHS
+              value: "/"
+          envFrom:
+            - secretRef:
+                name: open-webui-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /app/backend/data
+            - name: fsx-data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: open-webui-data
+        - name: fsx-data
+          persistentVolumeClaim:
+            claimName: fsx-deepframe-pvc-dev
