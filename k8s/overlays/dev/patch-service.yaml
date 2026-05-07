@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui
+  namespace: deepframe
+  annotations:
+    tailscale.com/hostname: df-open-webui-dev
+  labels:
+    app: open-webui-dev
+    run: open-webui-dev
+spec:
+  selector:
+    app: open-webui-dev
+    run: open-webui-dev

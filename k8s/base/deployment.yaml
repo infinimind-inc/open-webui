@@ -33,9 +33,9 @@ spec:
             - name: PORT
               value: "8080"
             - name: OPENAI_API_BASE_URLS
-              value: "http://df-model-deepframe-dev:8000/v1;http://brev-up8gmd44c:5566/v1"
+              value: "http://df-model-deepframe-dev:8000/v1"
             - name: OPENAI_API_KEYS
-              value: "potato;potato"
+              value: "potato"
             - name: VIDEO_POINTER_ALLOWED_PATHS
               value: "/"
           envFrom:
@@ -73,4 +73,4 @@ spec:
             claimName: open-webui-data
         - name: fsx-data
           persistentVolumeClaim:
-            claimName: fsx-deepframe-pvc-dev
+            claimName: fsx-deepframe-pvc

@@ -1,0 +1,23 @@
+# HTTPRoute for Open WebUI
+# Routes open-webui.dev.deepframe.cloud to the open-webui service in the deepframe namespace.
+# Auth is handled by the shared oauth2-proxy extAuth SecurityPolicy (see infrastructure repo:
+# aws/environments/im-dev/us-east-2/eks-deepframe/oauth2-proxy/manifests/open-webui-ext-auth.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: open-webui-route
+  namespace: deepframe
+spec:
+  parentRefs:
+    - name: envoy-gateway
+      namespace: envoy-gateway-system
+  hostnames:
+    - "open-webui.dev.deepframe.cloud"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: open-webui
+          port: 8080
